@@ -1,12 +1,14 @@
+import deepPool from './external/deepPool'
+
 export default {
 	loadWords,
 	findWords
 };
 
+// ****************************
+var pool = deepPool.create(() => [])
 var dict = {}
 var isWord = Symbol('is-Wwrd')
-
-// ****************************
 
 function loadWords(wordList) {
 	// implement a data structure for the array
@@ -36,13 +38,23 @@ function loadWords(wordList) {
 	return nodeCount
 }
 
-function findWords(input, prefix= '', node = dict) {
+function findWords(input, prefix = '', node = dict) {
+	try {
+		var allWords = findAllWords(input, prefix, node)
+		return [...allWords]
+	} finally {
+		allWords.length = 0
+		pool.recycle(allWords)
+	}
+}
+
+function findAllWords(input, prefix = '', node = dict) {
 	// implement unscrambling/searching logic
 	// for a string of uppercase letters in the
 	// `input` parameter; return the array of
 	// matching words
 
-	var words = []
+	var words = pool.use()
 	if (node[isWord]) {
 		words.push(prefix)
 	}
@@ -52,24 +64,32 @@ function findWords(input, prefix= '', node = dict) {
 
 		// does the current (sub)trie have a node for this letter?
 		if (node[currentLetter]) {
-			let remainingLetters = [
-				...input.slice(0,i),
-				...input.slice(i+1)
-			]
-			words.push(
-				...findWords(
-					remainingLetters, 
-					prefix + currentLetter, 
-					node[currentLetter]
-				)
+			let remainingLetters = pool.use()
+			remainingLetters.push(
+				[
+					...input.slice(0,i),
+					...input.slice(i+1)
+				]
 			)
+
+			let moreWords = findAllWords(
+				remainingLetters, 
+				prefix + currentLetter, 
+				node[currentLetter]
+			)
+			words.push(...moreWords)
+			moreWords.length = remainingLetters.length = 0
+			pool.recycle(moreWords)
+			pool.recycle(remainingLetters)
 		}
 	}
 
 	// only de-duplicate the list on the final
 	// outer recursion step right before we return
 	if (node === dict){
-		words = [ ...(new Set(words))]
+		let wordsSet = new Set(words)
+		words.length = 0
+		words.push(...wordsSet)
 	}
 
 	return words
